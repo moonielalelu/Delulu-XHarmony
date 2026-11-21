@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; media-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Delulu Is My Solulu (환상주의) — XHarmony</title>
 <meta property="og:title" content="Delulu Is My Solulu (환상주의) — XHarmony">
 <meta property="og:description" content="Reality’s a mess, but at least my man’s obsessed. Out 27.11.">
@@ -46,7 +47,7 @@
   /* ---------- music button ---------- */
   #musicBtn{
     position:fixed; right:24px; bottom:24px; z-index:999;
-    min-width:120px; text-align:center; padding:11px 20px;
+    min-width:140px; white-space:nowrap; text-align:center; padding:11px 20px;
     background:rgba(10,5,7,.82); color:#f1e6d0;
     border:1px solid rgba(var(--accent-rgb),.4); border-radius:999px;
     backdrop-filter:blur(10px);
@@ -448,7 +449,8 @@ const CONFIG = {
   ],
 
   hint:       "One of them is glowing. Pull it out.",
-  closingHtml: 'You know I’m not real, right?<br>…<br><span class="kr">다음 챕터.</span>'
+  // one entry per line; { kr: "..." } is set in the Korean face
+  closing: ['You know I’m not real, right?', '…', { kr: '다음 챕터.' }]
 };
 
 // =====================================================
@@ -497,14 +499,20 @@ $('tagline').append('”');
 
 $('channelsLabel').textContent = CONFIG.channelsLabel;
 $('channelsNote').textContent = CONFIG.channelsNote;
+// only https links are ever rendered as real links
+function safeUrl(u){
+  try { const x = new URL(u); return x.protocol === 'https:' ? x.href : ''; } catch { return ''; }
+}
 CONFIG.links.forEach(l => {
-  const ready = !!l.url;
+  const url = safeUrl(l.url);
+  const ready = !!url;
   const a = document.createElement(ready ? 'a' : 'span');
   a.className = 'channel' + (l.primary ? ' channel-primary' : '') + (ready ? '' : ' is-soon');
   if (ready) {
-    a.href = l.url;
+    a.href = url;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
+    a.referrerPolicy = 'no-referrer';
   } else {
     a.setAttribute('aria-disabled', 'true');
   }
@@ -516,7 +524,17 @@ CONFIG.links.forEach(l => {
   $('channels').append(a);
 });
 
-$('closing').innerHTML = CONFIG.closingHtml;
+CONFIG.closing.forEach((line, i) => {
+  if (i) $('closing').append(document.createElement('br'));
+  if (typeof line === 'string') {
+    $('closing').append(line);
+  } else {
+    const k = document.createElement('span');
+    k.className = 'kr';
+    k.textContent = line.kr;
+    $('closing').append(k);
+  }
+});
 
 // ---------- page layout: two pages (wide) or one scrolling page (narrow) ----------
 const wide = matchMedia('(min-width: 860px)');
@@ -645,10 +663,17 @@ function buildShelf(){
 }
 buildShelf();
 
-let resizeTimer;
+let resizeTimer, lastW = innerWidth, lastH = innerHeight;
 addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { setVh(); buildShelf(); fitPages(); }, 150);
+  resizeTimer = setTimeout(() => {
+    setVh();
+    if (innerWidth !== lastW || Math.abs(innerHeight - lastH) > 80) {
+      lastW = innerWidth; lastH = innerHeight;
+      buildShelf();
+    }
+    fitPages();
+  }, 150);
 });
 
 // =====================================================
@@ -711,14 +736,14 @@ if (!CONFIG.releaseAt) {
   const target = new Date(CONFIG.releaseAt);
   setReleaseLine(CONFIG.releasePrefix, CONFIG.releaseLabel);
 
-  let timerId;
   const goLive = () => {
     clearInterval(timerId);
     const t = $('telemetry');
+    if (t.classList.contains('is-live')) return;
     t.classList.add('is-live');
     t.removeAttribute('role');
     t.removeAttribute('aria-label');
-    t.innerHTML = '';
+    t.replaceChildren();
     const live = document.createElement('span');
     live.className = 't-live';
     live.textContent = CONFIG.liveText;
@@ -734,8 +759,9 @@ if (!CONFIG.releaseAt) {
     mm.textContent = pad(Math.floor((diff % 3600000) / 60000));
     ss.textContent = pad(Math.floor((diff % 60000) / 1000));
   };
+  // created BEFORE the first tick(), so clearInterval also works if the date has already passed on load
+  const timerId = setInterval(tick, 1000);
   tick();
-  timerId = setInterval(tick, 1000);
 }
 
 // =====================================================
@@ -760,7 +786,7 @@ async function startMusic(){
   if (!music.paused) return;
   clearInterval(fadeId);
   music.volume = 0;
-  try { await music.play(); fadeTo(MUSIC_VOL, 2500); } catch (err) { console.error(err); }
+  try { await music.play(); fadeTo(MUSIC_VOL, 2500); } catch { /* autoplay blocked: button stays on "Play song" */ }
 }
 function stopMusic(){
   if (music.paused) return;
