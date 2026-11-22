@@ -191,6 +191,13 @@
     transition:transform 1.6s cubic-bezier(.45,0,.2,1), opacity .7s;
   }
 
+  /* settled = flip finished: same picture, but drawn flat (prevents 3D compositing ghost lines) */
+  .scene.settled .book-stage{ perspective:none; }
+  .scene.settled .book{ transform-style:flat; transform:none; transition:none; }
+  .scene.settled .bb-left, .scene.settled .bb-right{ transform:none; }
+  .scene.settled .cover{ transform:none; transition:none; left:-9px; transform-style:flat; }
+  .scene.settled .cover-back{ transform:none; }
+  .scene.settled .cover-front{ display:none; }
   .bb-right, .bb-left{
     position:absolute; top:-8px; bottom:-8px; width:calc(50% + 9px);
     background:linear-gradient(135deg, var(--oxblood), var(--oxblood-deep));
@@ -353,6 +360,7 @@
     .bb-left, .cover-back{ display:none; }
     .rightpage{ width:100%; }
     .cover{ left:0; width:calc(100% + 9px); }
+    .scene.settled .cover{ display:none; }
     [data-state=open] .cover{ opacity:0; transition:transform 1.3s cubic-bezier(.45,0,.2,1), opacity .4s .7s; }
     #pageLeft .runhead{ display:none; }
     .sec-left{ flex:none; padding-bottom:1.6rem; }
@@ -720,16 +728,21 @@ function later(fn, ms){ timers.push(setTimeout(fn, ms)); }
 function pull(){
   if (state !== 'shelf') return;
   startMusic();   // taking the book starts the song (user gesture)
-  if (reduceMotion) { setState('open'); book.focus({ preventScroll: true }); return; }
+  timers.forEach(clearTimeout);
+  timers = [];
+  scene.classList.remove('settled');
+  if (reduceMotion) { setState('open'); scene.classList.add('settled'); book.focus({ preventScroll: true }); return; }
   setState('pulling');
   later(() => setState('cover'), 450);
   later(() => setState('open'), 1700);
+  later(() => scene.classList.add('settled'), 3400);   // flip (1.6 s) is done -> draw the book flat
   later(() => book.focus({ preventScroll: true }), 3400);
 }
 function putBack(){
   timers.forEach(clearTimeout);
   timers = [];
   setState('shelf');
+  later(() => scene.classList.remove('settled'), 900);   // keep it flat while the book fades out
   stopMusic();
   pullBtn.focus({ preventScroll: true });
 }
